@@ -1,5 +1,7 @@
 from collections import UserDict
 from datetime import datetime
+import json
+
 
 class Field:
     def __init__(self, value):
@@ -9,16 +11,16 @@ class Field:
         return str(self._value)
 
     @property
-    def get_value(self):
+    def value(self):
         return self._value
 
-    @get_value.setter
-    def set_value(self, new_value):
-        self.validate(self)
+    @value.setter
+    def value(self, new_value):
+        self.validate()
 
         self._value = new_value
 
-    def validate(self, new_value):
+    def validate(self):
         pass
 
 
@@ -38,7 +40,7 @@ class Phone(Field):
 
 
 class Birthday(Field):
-    def __init__(self, value):
+    def __init__(self, value=None):
         super().__init__(value)
         self.validate()
 
@@ -73,7 +75,7 @@ class Record:
         self.birthday = Birthday(birthday) if birthday else None
 
     def add_phone(self, phone):
-        phone = Phone(phone)
+        phone = Phone(str(phone))
         phone.validate()
         self.phones.append(phone)
 
@@ -99,7 +101,15 @@ class Record:
         return None
 
     def __str__(self):
-        return f"Contact name: {self.name._value}, phones: {'; '.join(phone_number._value for phone_number in self.phones)}"
+        if self.birthday:
+            # birthday_str = str(self.birthday._value) if self.birthday else "N/A"
+            return (f"Contact name: {self.name._value}, "
+                    f"phones: {'; '.join(phone_number._value for phone_number in self.phones)}, "
+                    f"birthday: {self.birthday._value}, "
+                    f"birthday in {self.days_to_birthday()} days")
+        else:
+            return (f"Contact name: {self.name._value}, "
+                    f"phones: {'; '.join(phone_number._value for phone_number in self.phones)}")
 
     def days_to_birthday(self):
         if not self.birthday:
@@ -125,6 +135,18 @@ class AddressBook(UserDict):
         if name in self.data:
             del self.data[name]
 
+    def search(self, keyword):
+        results = set()
+        for record in self.data.values():
+            if keyword.lower() in record.name.value.lower():
+                results.add(record)
+            for phone_number in record.phones:
+                if keyword in phone_number.value:
+                    results.add(record)
+                    break
+        return results
+
+
 class AddressBookPaginator:
     def __init__(self, address_book, page_size=10):
         self.address_book = address_book
@@ -147,3 +169,32 @@ class AddressBookPaginator:
         self.current_page += 1
         return page_content
 
+
+class FileManager:
+    @staticmethod
+    def save_to_json(address_book, filename):
+        records = []
+        for record in address_book.data.values():
+            record_data = {
+                "name": record.name._value,
+                "birthday": record.birthday._value if record.birthday else None,
+                "phones": [phone._value for phone in record.phones]
+            }
+            records.append(record_data)
+
+        with open(filename, 'w') as file:
+            json.dump(records, file)
+
+    @staticmethod
+    def load_from_json(filename):
+        with open(filename, 'r') as file:
+            data = json.load(file)
+            address_book = AddressBook()
+            for record_data in data:
+                record = Record(
+                    record_data['name'],
+                    record_data['birthday'])
+                for phone in record_data['phones']:
+                    record.add_phone(int(phone))
+                address_book.add_record(record)
+            return address_book
